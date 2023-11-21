@@ -10,24 +10,34 @@ from utils.verif_utils import *
 from utils.prune import *
 from importlib import import_module
 
-# In[]
+#
+# Step 1: Load the dataset
+#
 
+# load adult dataset 
+# df will contain the dataframe, each column, which feature, etc.
+# X_train, y_train, X_test, y_test are numpy arrays used for tarining
 df, X_train, y_train, X_test, y_test = load_adult_ac1()
+# X is the entire dataset, used for partitioning
 X = np.r_[X_train, X_test]
+# 13 features for an input
 single_input = X_test[0].reshape(1, 13)
-#print_metadata(df)
+# used for debugging the data format
+print_metadata(df)
 
-# In[]
+# model and output related parameters
 model_dir = '../../models/adult/'
 result_dir = './libra/sex-'
 PARTITION_THRESHOLD = 10
 
+# used for pruning
 SOFT_TIMEOUT = 100 
 HARD_TIMEOUT = 30*60
 HEURISTIC_PRUNE_THRESHOLD = 5
 
-# In[]
-## Domain
+# Feature Domain definitions
+# This could also be used for safety related verifications
+# this range will be partitioned by PARTITION_THRESHOLD to create partitions
 default_range = [0, 1]
 range_dict = {}
 range_dict['age'] = [10, 100]
@@ -45,13 +55,14 @@ range_dict['hours-per-week'] = [1, 100]
 range_dict['native-country'] = [0, 40]
 
 A = range_dict.keys()
+# protected attributes
 PA = ['sex']
-
+# maybe relaxed protected attributes
 RA = []
 RA_threshold = 5
 
 sim_size = 1 * 1000
-
+# need further check about this two operations, no real data involved
 p_dict = partition(range_dict, PARTITION_THRESHOLD)
 p_list = partitioned_ranges(A, PA, p_dict, range_dict)
 #p_density = p_list_density(range_dict, p_list, df)
@@ -69,16 +80,16 @@ for model_file in model_files:
     model_name = model_file.split('.')[0]
     if model_name == '':
         continue
-    
+    # the source code of such model, will be imported
     model_funcs = 'utils.' + model_name + '-Model-Functions'
-    mod = import_module(model_funcs)
-    layer_net = getattr(mod, 'layer_net')
+    mod = import_module(model_funcs) 
+    layer_net = getattr(mod, 'layer_net') # get function form imported module
     net = getattr(mod, 'net')
     z3_net = getattr(mod, 'z3_net')
 
     w = []
     b = []
-    
+    # load pretrained model
     model = load_model(model_dir + model_file)
     
     for i in range(len(model.layers)):
@@ -86,12 +97,13 @@ for model_file in model_files:
         b.append(model.layers[i].get_weights()[1])
         
     print('###################')
+    # stats about the verification
     partition_id = 0
     sat_count = 0
     unsat_count = 0
     unk_count = 0
     cumulative_time = 0
-    
+    # try a lot of partitions??
     for p in p_list:
         heuristic_attempted = 0
         result = []
@@ -103,6 +115,8 @@ for model_file in model_files:
         
         # In[]
     #    sd = s
+        # some nueurons are dead, some are alive
+        # some heuristic pruning
         neuron_bounds, candidates, s_candidates, b_deads, s_deads, st_deads, pos_prob, sim_X_df  = \
             sound_prune(df, w, b, simulation_size, layer_net, p)
     
@@ -134,6 +148,7 @@ for model_file in model_files:
         in_props.extend(in_const_domain_adult(df, x, x_, p, PA))
     
         # In[]
+        # initialize a z3 solver
         s = Solver()
         #s.reset()
     
@@ -146,6 +161,7 @@ for model_file in model_files:
         for i in in_props:
             s.add(i)
     
+        # y!=y_
         s.add(Or(And(y[0] < 0, y_[0] > 0), And(y[0] > 0, y_[0] < 0)))
     
         print('Verifying ...')
@@ -153,6 +169,7 @@ for model_file in model_files:
     
         print(res)
         if res == sat:
+            # later will give counter example
             m = s.model()
             inp1, inp2 = parse_z3Model(m)
         

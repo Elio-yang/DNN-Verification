@@ -446,6 +446,13 @@ def z3Relu(x):
     #FPVal(2.5, FPSort(8, 24))
     return np.vectorize(lambda y: If(y >= 0 , y, RealVal(0)))(x)
 
+# add more about activation functions
+def z3Sigmoid(x):
+    return np.vectorize(lambda y: If(y >= 0 , 1 / (1 + np.exp(-y)), np.exp(y) / (1 + np.exp(y))))(x)
+
+def z3Tanh(x):
+    return np.vectorize(lambda y: If(y >= 0 , (1 - np.exp(-2*y)) / (1 + np.exp(-2*y)), (np.exp(2*y) - 1) / (np.exp(2*y) + 1)))(x)
+
 def z3Abs(x):
     return If(x <= 0, -x, x)
 
